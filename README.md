@@ -23,7 +23,7 @@
 
 - Python 3.10+（只用标准库，不需要 `pip install`）
 - 已安装 **Codex** 和 **Trellis**（确认终端能跑通 `trellis channel --help`）
-- 本机已安装并登录两位外部评审 CLI（目前内置已实测 **Qoder CLI** `qodercli` 和 **Antigravity CLI** `agy`，已验证系统为 Windows）
+- 本机已安装并登录两位外部评审 CLI（内置开箱即用 **Qoder CLI** `qodercli` 和 **Antigravity CLI** `agy`；其他 AI CLI 安装时可由 Codex 自动检测、查文档并适配接入；已验证系统为 Windows）
 
 ### 安装方式：直接把下面这句话发给 Codex
 
@@ -88,11 +88,18 @@
 
 ## 我用的不是 Qoder + Antigravity 怎么办？
 
-不同同事手头装的 CLI 可能不一样（比如 Claude Code、Gemini CLI 等）。为了保证每个内置工具都真机实测过，仓库目前只放了已经跑通端到端验收的 `qoder` 和 `agy`。
+**不用自己改代码。** 仓库目前默认只内置了已经真机跑通端到端验收的 `qoder` 和 `agy`，如果你本机装的是其他 AI CLI（比如 Claude Code、Gemini CLI、OpenCode 等），直接让 Codex 帮你自动适配即可：
 
-如果你用其他支持命令行非交互调用的 AI CLI，接入成本很低——打开 [scripts/review.py](scripts/review.py)，照着里面的 `Qoder` 或 `Antigravity` 类新增一个适配器，并注册到 `PROVIDERS` 字典即可。
+1. **首次初始化时自动列清单**：Codex 会同时扫描本机已内置的 CLI 和其他常见 AI CLI，全部列出来让你选两个（没扫到的你也可以直接报命令名）。
+2. **在独立工作树试用**：选好两位后，Codex 查本机帮助和官方文档，为能原生限制写入的新 CLI 创建独立 Git worktree 和临时配置，自动编写适配器并跑实测。试验失败、取消或等待团队合并期间，你仍可用原组合；首次安装也无需提前创建正式配置。
+3. **验收后使用**：想先体验，可以直接用通过验收的候选工作树和临时配置。候选分支可提交 PR 供团队共享；本机安装的 `main` 更新到受测适配器后，再启用新组合。
 
-并发调度、超时控制、Windows 系统代理透传、断线重试、Channel 存档和结论解析都由公共框架接管，新适配器只需要实现 **3 个方法**：
+### 候选适配器验收
+
+<details>
+<summary>适配器技术契约与 4 项实测标准（Codex 自动适配和手动开发共用）</summary>
+
+并发调度、超时控制、Windows 系统代理透传、断线重试、Channel 存档和结论解析都由 [scripts/review.py](scripts/review.py) 的公共框架接管，新适配器只需新增一个类注册到 `PROVIDERS` 并实现 **3 个方法**：
 
 | 方法 | 作用 | 要注意的点 |
 | --- | --- | --- |
@@ -102,8 +109,48 @@
 
 > **可选属性**：如果 CLI 支持查询可用模型列表，可以顺手定义类属性 `list_args`（如 `["--list-models"]`），在用户点错模型名时自动列出可选项。若新 CLI 不是按行输出 JSON，则需要同步适配公共解析入口并补上单测。
 
-**提交新适配器前建议自测 4 件事**：
-1. 评审者确实能读到项目里的关联源码（不是只看提示词）；
-2. 尝试写文件或执行改写命令会被明确拒绝，目标文件字节不变；
-3. 完整跑通两轮（独立首评 + 交换原文互验）；
-4. 相同参数重跑一次，确认直接命中缓存、不再触发新的外部 CLI 调用。
+**隔离试验（PowerShell 示例，由 Codex 在本机执行）**。先按用户所选的两位标识替换 `<甲>`、`<乙>`。启动前核对全局技能安装位于团队仓库的干净 `main`。
+
+```powershell
+$trial = python -B "$HOME/.codex/skills/trellis-cross-review/scripts/adapter_trial.py" --reviewers "<甲>" "<乙>" | ConvertFrom-Json
+```
+
+脚本在安装目录外创建独立工作树，并返回候选配置的绝对路径 `$trial.config`。其中的 `models: {}` 沿用所选 CLI 的默认模型。所有适配代码和对应测试写入 `$trial.worktree`；可在 `candidate.json` 中设置用户点名的型号。从一次性项目根目录运行所测工作树的入口：
+
+```powershell
+python -B "$($trial.worktree)/scripts/review.py" gate --config "$($trial.config)" --task ".trellis/tasks/<验收任务>" --stage plan --scope plan --revision "<试验版本>" --brief-file "<问题文件>" --file "<方案文件>"
+```
+
+**四项真机验收**（代码和权限配置有变化时使用新试验版本）：
+
+1. **读源码**。附上需求并让评审者读取关联文件。用未放进提示的标记或源码事实核对最终回执。
+2. **逐通道查写权限**。以试验实际使用的 CLI 版本、账号、参数和有效工具清单为准，保留原生初始化记录、权限配置或工具事件。对每个候选评审者分别枚举所有可能改动文件的入口，包括直接创建/编辑/删除、Shell/命令、外部工具与 MCP、浏览器或 URL 执行、子代理、后台任务、钩子和可加载扩展。类别只作起点，继续展开该版本暴露的具体工具。没有对应能力或已原生禁用的通道，应以白名单、有效配置或原生清单佐证。对于可调用但受只读权限控制的通道，逐个在一次性目录内发起最小写入尝试，记录 CLI **实际拒绝该工具调用**的事件，并从磁盘保存独立的前后快照。涉及创建、删除、重命名或委派时，核对整个探针目录的路径及内容摘要，并等待后台操作结束。模型口头拒绝、缺少调用事件、未知通道、能力清单不完整或出现写入均不能通过。
+3. **两轮双评**。用上述命令向两位真实 CLI 派发，从新 Channel 或新版本开始独立首评和交换原文互验；核对实际启动、两轮回执与最终结论。
+4. **同参重放**。重复同一命令，确认四份回执 `reused=true` 且两端均无新增调用。在候选工作树运行 `python -B -m unittest discover -s tests -v`。
+
+对第 2 项，每端分别保留三份文件。先从本次 CLI 的原生工具/扩展清单和有效配置生成 `inventory.json`（潜在写入或权限未知的具体工具标识数组），与原始记录 `native-inventory.log` 对照后，再填写检查报告。纳入实际暴露的外部插件和自定义工具；无法识别能力或原生清单来源不全时，保持未验证。只有在原生记录确证没有额外具体写工具时，数组才可为空。盘点与填写探针结果是两个独立步骤。
+
+`channels.json` 的 `checks` 必须覆盖六类固定入口 `file`、`shell`、`extensions`、`browser`、`delegation`、`hooks`，以及 `inventory.json` 里的每个标识。下面的结构示例假定原生盘点列出一个名为 `Edit` 的具体工具；实际使用时按该端证据填写，不能照抄示例结论。
+
+```json
+{
+  "complete": true,
+  "inventory_evidence": "native-inventory.log",
+  "inventory": "inventory.json",
+  "checks": {
+    "file": {"result": "denied", "evidence": "edit-denied.log", "before": "before.bin", "after": "after.bin"},
+    "Edit": {"result": "denied", "evidence": "edit-denied.log", "before": "before.bin", "after": "after.bin"},
+    "shell": {"result": "disabled", "evidence": "effective-settings.log"},
+    "extensions": {"result": "disabled", "evidence": "effective-settings.log"},
+    "browser": {"result": "unavailable", "evidence": "native-inventory.log"},
+    "delegation": {"result": "unavailable", "evidence": "native-inventory.log"},
+    "hooks": {"result": "unavailable", "evidence": "native-inventory.log"}
+  }
+}
+```
+
+执行 `python -B "<worktree>/scripts/check_write_channels.py" "<证据目录>/channels.json"`。退出码 0 表示固定入口与盘点到的具体工具都有对应证据，拒写探针的独立前后快照 SHA-256 一致。适配者还须核对原生清单的完整性、证据里的工具与实际动作、拒绝结果、CLI 版本及生效参数。对于创建、删除等目录探针，可将整棵探针目录的内容摘要和相对路径清单分别保存成前后快照。证据存放在同一试验目录，归档前移除凭据。
+
+失败或取消时保留正式配置，已安装的技能继续停在原 `main`。候选代码和证据可留待诊断，或另开唯一分支重试。全部通过后，在候选分支提交适配代码。PR 合并前使用者可以显式调用工作树脚本和候选配置。已安装的 `main` 包含经过验证的实现、能解析候选配置并定位两位可执行文件后，再按 [SKILL.md](SKILL.md) 的校验和原子替换步骤启用新组合。
+
+</details>

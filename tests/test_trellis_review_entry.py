@@ -122,6 +122,55 @@ class ReviewEntryTests(unittest.TestCase):
             self.assertEqual(receipts["agy"]["requested_model"], "A")
             self.assertEqual(receipts["qoder"]["requested_model"], "B")
 
+    def test_trial_config_first_dispatch_and_replay_without_home_config(self):
+        self.config.unlink()
+        trial = self.task / "候选 组合.json"
+        trial.write_text('{"reviewers":["candidate","agy"],"models":{}}', encoding="utf-8")
+        with patch.dict(review.PROVIDERS, {"candidate": review.Qoder}):
+            code, report = self.invoke("plan", scope="plan", dispatch=True, extra=["--config", str(trial)])
+            self.assertEqual((code, report["status"]), (0, "pass"))
+            self.assertEqual(len(report["rounds"]), 2)
+            for receipts in report["rounds"]:
+                self.assertEqual(set(receipts), {"candidate", "agy"})
+                for receipt in receipts.values():
+                    self.assertIsNone(receipt["requested_model"])
+                    self.assertFalse(receipt["reused"])
+            self.assertEqual(self.cli.call_count, 4)
+            self.cli.reset_mock()
+            code, replay = self.invoke("plan", dispatch=True, extra=["--config", str(trial)])
+            self.assertEqual((code, replay["status"]), (0, "pass"))
+            self.assertTrue(all(receipt["reused"] for pair in replay["rounds"] for receipt in pair.values()))
+            self.cli.assert_not_called()
+        self.assertFalse(self.config.exists())
+
+    def test_explicit_config_must_be_valid_even_with_all_cli_overrides(self):
+        home_bytes = self.config.read_bytes()
+        trial = self.task / "trial.json"
+        for contents in [None, "{", '{"reviewers":["candidate","unknown"],"models":{}}']:
+            with self.subTest(contents=contents):
+                if contents is not None:
+                    trial.write_text(contents, encoding="utf-8")
+                code, result = self.invoke("plan", scope="plan", dispatch=True, extra=[
+                    "--config", str(trial), "--reviewers", "qoder", "agy", "--model", "qoder=A", "--model", "agy=B"])
+                self.assertEqual((code, result["status"]), (2, "pending"))
+                self.assertIn(str(trial), result["error"])
+                self.assertEqual(self.config.read_bytes(), home_bytes)
+        self.cli.assert_not_called()
+        self.channel.assert_not_called()
+
+    def test_trial_provider_failure_preserves_original_pair_and_models(self):
+        self.config.write_text('{"reviewers":["qoder","agy"],"models":{"qoder":"keep"}}', encoding="utf-8")
+        home_bytes = self.config.read_bytes()
+        trial = self.task / "trial.json"
+        trial.write_text('{"reviewers":["candidate","agy"],"models":{}}', encoding="utf-8")
+        self.cli.return_value = {"ok": False, "text": "", "error": "fixture failed"}
+        with patch.dict(review.PROVIDERS, {"candidate": review.Qoder}):
+            code, result = self.invoke("plan", scope="plan", dispatch=True, extra=["--config", str(trial)])
+        self.assertEqual((code, result["status"]), (2, "pending"))
+        self.assertEqual(set(result["rounds"][0]), {"candidate", "agy"})
+        self.assertEqual(self.config.read_bytes(), home_bytes)
+        self.assertEqual(review.resolve_reviewers(None, {}), (["qoder", "agy"], {"qoder": "keep"}))
+
     def test_invalid_config_reports_its_path_before_channel_or_dispatch(self):
         for text in ["{", "[]", "{}", '{"reviewers":["qoder","missing"],"models":{}}',
                      '{"reviewers":["qoder","qoder"],"models":{}}',

@@ -687,12 +687,12 @@ def stage_choice(task, stage, scope, gate):
                 "stage": stage, "scope": choice}
 
 
-def resolve_reviewers(cli_reviewers, cli_models):
-    """Use command-line values first, and consult the machine defaults for missing values."""
-    if cli_reviewers and set(cli_reviewers) == cli_models.keys():
+def resolve_reviewers(cli_reviewers, cli_models, config_path: Path | None = None):
+    """Validate an explicit config even when every reviewer and model is overridden."""
+    if config_path is None and cli_reviewers and set(cli_reviewers) == cli_models.keys():
         return cli_reviewers, cli_models
 
-    path = Path.home() / ".codex" / "cross-review.json"
+    path = config_path if config_path is not None else Path.home() / ".codex" / "cross-review.json"
     try:
         config = json.loads(path.read_text(encoding="utf-8-sig"))
     except FileNotFoundError as exc:
@@ -730,6 +730,8 @@ def main(argv=None):
     parser.add_argument("--brief-file", type=Path, help="派发时提供 UTF-8 用户需求、关注点及验收依据")
     parser.add_argument("--file", action="append", default=[], type=Path, help="附加材料，可重复；自动包含任务 prd.md")
     parser.add_argument("--channel", help="项目 chat channel，默认由任务名派生")
+    parser.add_argument("--config", type=Path, metavar="PATH",
+                        help="本次派发读取的 UTF-8 评审配置；默认 ~/.codex/cross-review.json")
     parser.add_argument("--reviewers", nargs=2, choices=list(PROVIDERS), help="覆盖本机配置的两位评审者")
     parser.add_argument("--model", action="append", default=[], metavar="CLI=MODEL")
     parser.add_argument("--timeout", type=float, default=600, help="每位评审者每轮的总时限，单位秒")
@@ -759,7 +761,7 @@ def main(argv=None):
         if not dispatch or decision["status"] != "selected":
             print(json.dumps(decision, ensure_ascii=False))
             return 2 if dispatch else 0
-        reviewers, models = resolve_reviewers(args.reviewers, models)
+        reviewers, models = resolve_reviewers(args.reviewers, models, args.config)
         materials = {}
         for path in [task / "prd.md", *args.file]:
             path = path.resolve()
