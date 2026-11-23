@@ -11,17 +11,27 @@ description: 在包含 .trellis/tasks/ 的项目中，在方案提交批准前�
 
 当用户要求安装/初始化本技能，或派发报错提示缺少 `~/.codex/cross-review.json`、配置无效、找不到评审 CLI 时，按下面顺序自动引导，不要只抛报错让用户手动改文件：
 
-1. **探测本机 CLI**：检查 `trellis channel --help` 是否可用，并通过 `scripts/review.py` 的 `PROVIDERS`（逐个调用 `executable()`）探测本机已装的已注册评审 CLI（当前为 `qoder`、`agy`）；如已注册 CLI 不足两位，可顺手检查本机是否装了其他常见 AI CLI（如 `claude`、`gemini` 等）以提供建议。
+1. **探测本机 CLI**：检查 `trellis channel --help` 是否可用，并通过 `python -B` 加载 `scripts/review.py` 的 `PROVIDERS`（逐个调用 `executable()`）探测本机已装的已注册评审 CLI（当前为 `qoder`、`agy`）；如已注册 CLI 不足两位，可顺手检查本机是否装了其他常见 AI CLI（如 `claude`、`gemini` 等）以提供建议。
 2. **生成 `~/.codex/cross-review.json`**：
    - 若文件已存在且有效，**保留原配置不覆盖**，除非用户明确要求修改。
    - 若本机检测到至少两位已注册 CLI，向用户确认选用这两位（默认 `models` 填 `{}` 沿用各端默认型号；若用户已明确要求自动配置可直接写入）。
    - 若已注册 CLI 不足两位，明确汇报当前检测到哪些、缺少哪些，并给出 3 个选择：安装缺失的已注册 CLI、让 Codex 按 [README.md](README.md) 的三方法契约把用户手头的其他 CLI 接成新适配器、或当前任务先改走自查（`--scope self`）。
-3. **检查全局触发入口**：检查 `~/.codex/AGENTS.md`（不存在则新建）；若尚未包含 `## Trellis 交叉评审`，在文件末尾安全追加以下两行，严禁修改或删除原有内容：
+3. **检查全局触发入口**：检查 `~/.codex/AGENTS.md`（不存在则新建），核对的是**实际触发规则**而不是只看标题。完整入口如下：
    ```markdown
    ## Trellis 交叉评审
    在存在 `.trellis/tasks/` 的项目中，提交方案给用户批准前和实施最终全范围验收前，按全局技能 `trellis-cross-review` 执行交叉评审入口。
    ```
-4. **验证与续跑**：首次安装后可在技能目录运行 `python -B -m unittest discover -s tests -v` 确认环境正常；若是在任务派发中途触发的缺配引导，补齐配置后直接继续原 `gate` 派发。
+   - 标题和完整触发规则（明确覆盖 `.trellis/tasks/`、方案批准前与最终验收前、`trellis-cross-review`）都已存在：保留原文件不动。
+   - 只有 `## Trellis 交叉评审` 标题但缺少或残缺触发正文：在该标题下方补全上述正文，不改动其他内容。
+   - 两者均缺失：在文件末尾追加完整两行，严禁修改或删除原有内容。
+4. **区分“脚本单测”与“本机已就绪”**：
+   - **脚本单测**：在技能目录运行 `python -B -m unittest discover -s tests -v`。这只验证脚本自身逻辑（测试使用隔离临时目录和桩对象），**单测全绿不等于本机已就绪**。
+   - **本机已就绪（4 项全部通过才算安装完成）**：
+     1. `trellis channel --help` 退出码为 `0`；
+     2. 用 `python -B` 加载 `scripts/review.py`，实际读取 `~/.codex/cross-review.json` 并通过 `resolve_reviewers(None, {})` 校验；
+     3. 配置里选定的两位评审者都能通过各自适配器的 `executable()` 定位到真实可执行文件；
+     4. `~/.codex/AGENTS.md` 已包含完整触发规则。
+   - 若单测通过但以上任一项未满足，明确汇报“脚本单测通过，但本机尚未就绪”并列出缺失项；若是在任务派发中途触发的缺配引导，本机就绪后直接继续原 `gate` 派发。
 
 ## 查询任务的评审范围
 

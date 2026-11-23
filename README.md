@@ -27,19 +27,20 @@
 
 ### 安装方式：直接把下面这句话发给 Codex
 
-复制发给 Codex，它会自己克隆仓库，再按 [SKILL.md](SKILL.md) 的首次配置流程自动检测你本机装了哪些 CLI、引导或生成配置、安全追加全局入口并跑通单测：
+复制发给 Codex，它会自己克隆或安全更新仓库，再按 [SKILL.md](SKILL.md) 的首次配置流程自动检测本机 CLI、生成配置、补全全局入口，并分别验证脚本单测和本机就绪状态：
 
-> 帮我安装并初始化 `trellis-cross-review` 全局技能：先把 `ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git` 克隆到 `$HOME/.codex/skills/trellis-cross-review`（已有就 `git pull`），然后直接按该技能的 `SKILL.md`「首次配置与缺配引导」完成本机 CLI 检测、配置生成、全局 `AGENTS.md` 挂接和单测验证。
+> 帮我安装并初始化 `trellis-cross-review` 全局技能：若 `$HOME/.codex/skills/trellis-cross-review` 不存在，将 `ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git` 克隆到该路径；若目录已存在，先核对 `origin` 指向该团队仓库、当前分支为 `main` 且工作区干净，再执行 `git pull --ff-only origin main`（若 `origin`、分支不符或有未提交改动，先停下来提示我）。更新后按该技能 `SKILL.md`「首次配置与缺配引导」完成本机 CLI 检测、配置生成、全局 `AGENTS.md` 触发规则核验，并分别汇报脚本单测结果与本机就绪检查结果。
 
 完成后**新开一个 Codex 对话**即可生效。如果你已经手动克隆过仓库，直接跟 Codex 说“按 `trellis-cross-review` 技能帮我检测 CLI 并初始化配置”就行。
 
 <details>
 <summary>想手动安装，或查看 Agent 具体会改哪两个文件？点这里展开</summary>
 
-1. **克隆仓库**：
+1. **克隆或更新仓库**：
    ```sh
    git clone "ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git" "$HOME/.codex/skills/trellis-cross-review"
    ```
+   若目录已存在，先确认 `git remote get-url origin` 指向团队仓库、当前分支为 `main`，且在技能目录执行 `git status --porcelain` 输出为空，再执行 `git pull --ff-only origin main`。
 2. **创建 `~/.codex/cross-review.json`**（UTF-8，Windows 下为 `C:\Users\<用户名>\.codex\cross-review.json`）：
    ```json
    {
@@ -49,12 +50,21 @@
    ```
    - `reviewers`：两位不同的已注册评审者（当前内置 `qoder`、`agy`）。
    - `models`：指定某端模型时填 `{"qoder": "模型名"}`；留空 `{}` 沿用各 CLI 默认模型。临时想换也可以在聊天里直接告诉 Codex 覆盖。
-3. **在 `~/.codex/AGENTS.md` 末尾追加**：
+3. **核对 `~/.codex/AGENTS.md` 的全局触发入口**：
    ```markdown
    ## Trellis 交叉评审
    在存在 `.trellis/tasks/` 的项目中，提交方案给用户批准前和实施最终全范围验收前，按全局技能 `trellis-cross-review` 执行交叉评审入口。
    ```
-4. **验证**：在技能目录执行 `python -B -m unittest discover -s tests -v`，全部 `OK` 即安装成功。
+   - 标题和完整触发正文都已在文件里：保持原文件不变。
+   - 只有 `## Trellis 交叉评审` 空标题或正文残缺：直接在该标题下方补全正文，不产生重复标题。
+   - 两者都缺失：在文件末尾追加完整两行，不动原有内容。
+4. **分开验证“脚本单测”和“本机就绪”**：
+   - **脚本单测**：在技能目录执行 `python -B -m unittest discover -s tests -v`（只验证脚本逻辑，单测通过不代表本机已就绪）。
+   - **本机就绪（4 项全过才算安装完成）**：
+     1. `trellis channel --help` 退出码为 `0`；
+     2. 在技能目录用 `python -B` 加载 `scripts/review.py`，调用 `resolve_reviewers(None, {})` 校验 `~/.codex/cross-review.json` 合法；
+     3. 用配置返回的每位评审者标识调用 `PROVIDERS[name].executable()`，确认两个真实可执行文件都能定位；
+     4. 确认 `~/.codex/AGENTS.md` 已包含第 3 步的完整触发正文。
 
 </details>
 
