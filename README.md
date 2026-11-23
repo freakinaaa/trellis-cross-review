@@ -4,10 +4,10 @@
 
 ## 安装
 
-1. 在装有 Python 3.10+、Codex 和 Trellis 的机器上，将以下地址替换成团队的 Gitea 克隆地址。确认 `trellis channel --help` 可用。已实测的运行环境为 Windows，评审者 CLI 需要各自安装，并能从当前账号非交互运行。
+1. 在装有 Python 3.10+、Codex 和 Trellis 的机器上，用有仓库读取权限的 SSH 密钥执行以下克隆命令。确认 `trellis channel --help` 可用。已实测的运行环境为 Windows，评审者 CLI 需要各自安装，并能从当前账号非交互运行。
 
    ```sh
-   git clone "<团队 Gitea 克隆地址>" "$HOME/.codex/skills/trellis-cross-review"
+   git clone "ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git" "$HOME/.codex/skills/trellis-cross-review"
    ```
 
 2. 创建 UTF-8 文件 `~/.codex/cross-review.json`，写入两位已安装且已注册的评审者。以下示例适用于 Qoder CLI 和 Antigravity CLI。使用其他 CLI 的同事先按下文添加并验证适配器，再填相应标识。
