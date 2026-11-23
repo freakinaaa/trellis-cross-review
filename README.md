@@ -150,36 +150,13 @@ $trial = python -B "$HOME/.codex/skills/trellis-cross-review/scripts/adapter_tri
 python -B "$($trial.worktree)/scripts/review.py" gate --config "$($trial.config)" --task ".trellis/tasks/<验收任务>" --stage plan --scope plan --revision "<试验版本>" --brief-file "<问题文件>" --file "<方案文件>"
 ```
 
-**四项真机验收**（代码和权限配置有变化时使用新试验版本）：
+**四项真机验收**（代码或权限参数有变化时使用新试验版本）：
 
-1. **读源码**。附上需求并让评审者读取关联文件。用未放进提示的标记或源码事实核对最终回执。
-2. **逐通道查写权限**。以试验实际使用的 CLI 版本、账号、参数和有效工具清单为准，保留原生初始化记录、权限配置或工具事件。对每个候选评审者分别枚举所有可能改动文件的入口，包括直接创建/编辑/删除、Shell/命令、外部工具与 MCP、浏览器或 URL 执行、子代理、后台任务、钩子和可加载扩展。类别只作起点，继续展开该版本暴露的具体工具。没有对应能力或已原生禁用的通道，应以白名单、有效配置或原生清单佐证。对于可调用但受只读权限控制的通道，逐个在一次性目录内发起最小写入尝试，记录 CLI **实际拒绝该工具调用**的事件，并从磁盘保存独立的前后快照。涉及创建、删除、重命名或委派时，核对整个探针目录的路径及内容摘要，并等待后台操作结束。模型口头拒绝、缺少调用事件、未知通道、能力清单不完整或出现写入均不能通过。
-3. **两轮双评**。用上述命令向两位真实 CLI 派发，从新 Channel 或新版本开始独立首评和交换原文互验；核对实际启动、两轮回执与最终结论。
-4. **同参重放**。重复同一命令，确认四份回执 `reused=true` 且两端均无新增调用。在候选工作树运行 `python -B -m unittest discover -s tests -v`。
+1. **读源码**：附上需求并让评审者读取项目里的关联文件，用未写进提示词的源码事实或随机标记核对回执。
+2. **只读拦截实测**：按实际启用的工具逐项核对 CLI 参数和权限，确认写文件、Shell/命令执行、MCP/插件及子代理/后台任务等可写入口已被原生禁用或受只读限制；对每个仍可调用的写入口在一次性目录分别发起最小写入探针，等后台操作结束，确认 CLI **实际拒绝调用**且整个探针目录的文件清单与内容哈希不变（只靠模型口头拒绝不算通过，无需额外填表）。
+3. **两轮双评**：用上述命令向两位真实 CLI 派发，完整跑通独立首评与交换原文互验，核对两轮回执与最终结论。
+4. **同参重放与单测**：重复同一命令，确认四份回执 `reused=true` 且无新增 CLI 调用；在候选工作树运行 `python -B -m unittest discover -s tests -v` 全绿。
 
-对第 2 项，每端分别保留三份文件。先从本次 CLI 的原生工具/扩展清单和有效配置生成 `inventory.json`（潜在写入或权限未知的具体工具标识数组），与原始记录 `native-inventory.log` 对照后，再填写检查报告。纳入实际暴露的外部插件和自定义工具；无法识别能力或原生清单来源不全时，保持未验证。只有在原生记录确证没有额外具体写工具时，数组才可为空。盘点与填写探针结果是两个独立步骤。
-
-`channels.json` 的 `checks` 必须覆盖六类固定入口 `file`、`shell`、`extensions`、`browser`、`delegation`、`hooks`，以及 `inventory.json` 里的每个标识。下面的结构示例假定原生盘点列出一个名为 `Edit` 的具体工具；实际使用时按该端证据填写，不能照抄示例结论。
-
-```json
-{
-  "complete": true,
-  "inventory_evidence": "native-inventory.log",
-  "inventory": "inventory.json",
-  "checks": {
-    "file": {"result": "denied", "evidence": "edit-denied.log", "before": "before.bin", "after": "after.bin"},
-    "Edit": {"result": "denied", "evidence": "edit-denied.log", "before": "before.bin", "after": "after.bin"},
-    "shell": {"result": "disabled", "evidence": "effective-settings.log"},
-    "extensions": {"result": "disabled", "evidence": "effective-settings.log"},
-    "browser": {"result": "unavailable", "evidence": "native-inventory.log"},
-    "delegation": {"result": "unavailable", "evidence": "native-inventory.log"},
-    "hooks": {"result": "unavailable", "evidence": "native-inventory.log"}
-  }
-}
-```
-
-执行 `python -B "<worktree>/scripts/check_write_channels.py" "<证据目录>/channels.json"`。退出码 0 表示固定入口与盘点到的具体工具都有对应证据，拒写探针的独立前后快照 SHA-256 一致。适配者还须核对原生清单的完整性、证据里的工具与实际动作、拒绝结果、CLI 版本及生效参数。对于创建、删除等目录探针，可将整棵探针目录的内容摘要和相对路径清单分别保存成前后快照。证据存放在同一试验目录，归档前移除凭据。
-
-失败或取消时保留正式配置，已安装的技能继续停在原 `main`。候选代码和证据可留待诊断，或另开唯一分支重试。全部通过后，在候选分支提交适配代码。PR 合并前使用者可以显式调用工作树脚本和候选配置。已安装的 `main` 包含经过验证的实现、能解析候选配置并定位两位可执行文件后，再按 [SKILL.md](SKILL.md) 的校验和原子替换步骤启用新组合。
+失败或取消时保留原 `~/.codex/cross-review.json` 和安装目录 `main` 不变；全部通过后在候选分支提交代码即可推送提 PR。合并回 `main` 后若适配代码或权限参数有变动须换新试验版本复验，确认无变化并核对 `previous_config_sha256` 后再原子替换正式配置。
 
 </details>
