@@ -1,11 +1,27 @@
 ---
 name: trellis-cross-review
-description: 在包含 .trellis/tasks/ 的项目中，在方案提交批准前或实现最终全范围检查前，从 Codex 按任务选择调用两位本机 CLI 只读评审者，自动互验并恢复已有回执。
+description: 在包含 .trellis/tasks/ 的项目中，在方案提交批准前或实现最终全范围检查前，从 Codex 按任务选择调用两位本机 CLI 只读评审者，自动互验并恢复已有回执；也用于首次安装检测本机 CLI、生成 cross-review.json 与挂接全局 AGENTS.md。
 ---
 
 # Trellis 交叉评审
 
 在目标项目根目录工作。提交方案给用户批准前使用 `plan`，实施最终全范围验收前使用 `acceptance`。使用当前 Trellis 任务目录；后续阶段、重试和恢复沿用该任务。
+
+## 首次配置与缺配引导
+
+当用户要求安装/初始化本技能，或派发报错提示缺少 `~/.codex/cross-review.json`、配置无效、找不到评审 CLI 时，按下面顺序自动引导，不要只抛报错让用户手动改文件：
+
+1. **探测本机 CLI**：检查 `trellis channel --help` 是否可用，并通过 `scripts/review.py` 的 `PROVIDERS`（逐个调用 `executable()`）探测本机已装的已注册评审 CLI（当前为 `qoder`、`agy`）；如已注册 CLI 不足两位，可顺手检查本机是否装了其他常见 AI CLI（如 `claude`、`gemini` 等）以提供建议。
+2. **生成 `~/.codex/cross-review.json`**：
+   - 若文件已存在且有效，**保留原配置不覆盖**，除非用户明确要求修改。
+   - 若本机检测到至少两位已注册 CLI，向用户确认选用这两位（默认 `models` 填 `{}` 沿用各端默认型号；若用户已明确要求自动配置可直接写入）。
+   - 若已注册 CLI 不足两位，明确汇报当前检测到哪些、缺少哪些，并给出 3 个选择：安装缺失的已注册 CLI、让 Codex 按 [README.md](README.md) 的三方法契约把用户手头的其他 CLI 接成新适配器、或当前任务先改走自查（`--scope self`）。
+3. **检查全局触发入口**：检查 `~/.codex/AGENTS.md`（不存在则新建）；若尚未包含 `## Trellis 交叉评审`，在文件末尾安全追加以下两行，严禁修改或删除原有内容：
+   ```markdown
+   ## Trellis 交叉评审
+   在存在 `.trellis/tasks/` 的项目中，提交方案给用户批准前和实施最终全范围验收前，按全局技能 `trellis-cross-review` 执行交叉评审入口。
+   ```
+4. **验证与续跑**：首次安装后可在技能目录运行 `python -B -m unittest discover -s tests -v` 确认环境正常；若是在任务派发中途触发的缺配引导，补齐配置后直接继续原 `gate` 派发。
 
 ## 查询任务的评审范围
 

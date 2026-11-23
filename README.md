@@ -17,7 +17,7 @@
 
 ---
 
-## 3 分钟安装
+## 快速安装（一句话让 Codex 自己装）
 
 ### 前置条件
 
@@ -25,49 +25,38 @@
 - 已安装 **Codex** 和 **Trellis**（确认终端能跑通 `trellis channel --help`）
 - 本机已安装并登录两位外部评审 CLI（目前内置已实测 **Qoder CLI** `qodercli` 和 **Antigravity CLI** `agy`，已验证系统为 Windows）
 
-### 第 1 步：把仓库克隆到 Codex 全局技能目录
+### 安装方式：直接把下面这句话发给 Codex
 
-在终端直接执行（PowerShell 和 Git Bash 都可以；也可以换成 Gitea 页面上的 HTTP 克隆地址）：
+复制发给 Codex，它会自己克隆仓库，再按 [SKILL.md](SKILL.md) 的首次配置流程自动检测你本机装了哪些 CLI、引导或生成配置、安全追加全局入口并跑通单测：
 
-```sh
-git clone "ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git" "$HOME/.codex/skills/trellis-cross-review"
-```
+> 帮我安装并初始化 `trellis-cross-review` 全局技能：先把 `ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git` 克隆到 `$HOME/.codex/skills/trellis-cross-review`（已有就 `git pull`），然后直接按该技能的 `SKILL.md`「首次配置与缺配引导」完成本机 CLI 检测、配置生成、全局 `AGENTS.md` 挂接和单测验证。
 
-### 第 2 步：告诉脚本你本机用哪两个 CLI
+完成后**新开一个 Codex 对话**即可生效。如果你已经手动克隆过仓库，直接跟 Codex 说“按 `trellis-cross-review` 技能帮我检测 CLI 并初始化配置”就行。
 
-新建文件 `~/.codex/cross-review.json`（UTF-8 编码，Windows 下即 `C:\Users\<你的用户名>\.codex\cross-review.json`）：
+<details>
+<summary>想手动安装，或查看 Agent 具体会改哪两个文件？点这里展开</summary>
 
-```json
-{
-  "reviewers": ["qoder", "agy"],
-  "models": {}
-}
-```
+1. **克隆仓库**：
+   ```sh
+   git clone "ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git" "$HOME/.codex/skills/trellis-cross-review"
+   ```
+2. **创建 `~/.codex/cross-review.json`**（UTF-8，Windows 下为 `C:\Users\<用户名>\.codex\cross-review.json`）：
+   ```json
+   {
+     "reviewers": ["qoder", "agy"],
+     "models": {}
+   }
+   ```
+   - `reviewers`：两位不同的已注册评审者（当前内置 `qoder`、`agy`）。
+   - `models`：指定某端模型时填 `{"qoder": "模型名"}`；留空 `{}` 沿用各 CLI 默认模型。临时想换也可以在聊天里直接告诉 Codex 覆盖。
+3. **在 `~/.codex/AGENTS.md` 末尾追加**：
+   ```markdown
+   ## Trellis 交叉评审
+   在存在 `.trellis/tasks/` 的项目中，提交方案给用户批准前和实施最终全范围验收前，按全局技能 `trellis-cross-review` 执行交叉评审入口。
+   ```
+4. **验证**：在技能目录执行 `python -B -m unittest discover -s tests -v`，全部 `OK` 即安装成功。
 
-- `reviewers`：填入两位不同的已注册评审者标识（当前内置 `qoder`、`agy`）。
-- `models`：想给某端固定指定模型时填，比如 `{"qoder": "某模型名"}`；留空 `{}` 表示直接沿用各 CLI 自己的默认模型。
-- 临时想换组合或模型时，也可以直接告诉 Codex，它会通过 `--reviewers` 和 `--model CLI=MODEL` 覆盖本机默认配置。
-
-### 第 3 步：在个人全局 `AGENTS.md` 里挂上入口
-
-打开你自己的 `~/.codex/AGENTS.md`（没有就新建），**在文件末尾追加这两行**（别动你原来写的内容）：
-
-```markdown
-## Trellis 交叉评审
-在存在 `.trellis/tasks/` 的项目中，提交方案给用户批准前和实施最终全范围验收前，按全局技能 `trellis-cross-review` 执行交叉评审入口。
-```
-
-保存后，**新开一个 Codex 对话**就生效了。
-
-### 第 4 步：跑一下单测确认没装歪
-
-在 `~/.codex/skills/trellis-cross-review` 目录执行：
-
-```sh
-python -B -m unittest discover -s tests -v
-```
-
-看到全部 `OK` 就说明环境完全正常。
+</details>
 
 ---
 
