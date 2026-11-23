@@ -15,7 +15,6 @@ description: 在包含 .trellis/tasks/ 的项目中，在方案提交批准前�
 python "$HOME/.codex/skills/trellis-cross-review/scripts/review.py" gate --task ".trellis/tasks/<任务>" --stage plan
 ```
 
-在本机，绝对路径调用等价于 `python "C:/Users/admin/.codex/skills/trellis-cross-review/scripts/review.py" gate --task ".trellis/tasks/<任务>" --stage plan`。
 
 用户在聊天里已指定或更改范围时，同次加上 `--scope` 和对应值。以最新明确答复为准。四种选择为“本次自查” `self`、“仅方案” `plan`、“仅验收” `acceptance` 和“方案和验收” `both`。
 
