@@ -58,7 +58,7 @@ scripts/review.py gate  ──► 读任务 task.json 里的选择（未选时�
 
 复制发给 Codex，它会自己克隆或安全更新仓库，再按 [SKILL.md](SKILL.md) 的首次配置流程自动检测本机 CLI、生成配置、补全全局入口，并分别验证脚本单测和本机就绪状态：
 
-> 帮我安装并初始化 `trellis-cross-review` 全局技能：若 `$HOME/.codex/skills/trellis-cross-review` 不存在，将 `ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git` 克隆到该路径；若目录已存在，先核对 `origin` 指向该团队仓库、当前分支为 `main` 且工作区干净，再执行 `git pull --ff-only origin main`（若 `origin`、分支不符或有未提交改动，先停下来提示我）。更新后按该技能 `SKILL.md`「首次配置与缺配引导」完成本机 CLI 检测、配置生成、全局 `AGENTS.md` 触发规则核验，并分别汇报脚本单测结果与本机就绪检查结果。
+> 帮我安装并初始化 `trellis-cross-review` 全局技能：若 `$HOME/.codex/skills/trellis-cross-review` 不存在，将 `https://github.com/freakinaaa/trellis-cross-review.git` 克隆到该路径；若目录已存在，先核对 `origin` 指向该团队仓库、当前分支为 `main` 且工作区干净，再执行 `git pull --ff-only origin main`（若 `origin`、分支不符或有未提交改动，先停下来提示我）。更新后按该技能 `SKILL.md`「首次配置与缺配引导」完成本机 CLI 检测、配置生成、全局 `AGENTS.md` 触发规则核验，并分别汇报脚本单测结果与本机就绪检查结果。
 
 完成后**新开一个 Codex 对话**即可生效。如果你已经手动克隆过仓库，直接跟 Codex 说“按 `trellis-cross-review` 技能帮我检测 CLI 并初始化配置”就行。
 
@@ -67,7 +67,7 @@ scripts/review.py gate  ──► 读任务 task.json 里的选择（未选时�
 
 1. **克隆或更新仓库**：
    ```sh
-   git clone "ssh://git@192.168.1.81:2222/czl/trellis-cross-review.git" "$HOME/.codex/skills/trellis-cross-review"
+   git clone "https://github.com/freakinaaa/trellis-cross-review.git" "$HOME/.codex/skills/trellis-cross-review"
    ```
    若目录已存在，先确认 `git remote get-url origin` 指向团队仓库、当前分支为 `main`，且在技能目录执行 `git status --porcelain` 输出为空，再执行 `git pull --ff-only origin main`。
 2. **创建 `~/.codex/cross-review.json`**（UTF-8，Windows 下为 `C:\Users\<用户名>\.codex\cross-review.json`）：
@@ -160,3 +160,7 @@ python -B "$($trial.worktree)/scripts/review.py" gate --config "$($trial.config)
 失败或取消时保留原 `~/.codex/cross-review.json` 和安装目录 `main` 不变；全部通过后在候选分支提交代码即可推送提 PR。合并回 `main` 后若适配代码或权限参数有变动须换新试验版本复验，确认无变化并核对 `previous_config_sha256` 后再原子替换正式配置。
 
 </details>
+
+## 许可证
+
+[MIT](LICENSE)
